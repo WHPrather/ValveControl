@@ -1,0 +1,252 @@
+#include <WaspWIFI.h>
+
+void asciiArt(void);
+void systemInfo(void);
+void wifiSetup(void);
+void wifiConnect(void);
+
+uint8_t socket=SOCKET0;
+
+#define ESSID "Advantage"
+#define AUTHKEY "T3chn0l0gy"
+#define LOCAL_PORT 2000
+#define STATIC_IP "172.16.51.57"
+#define NETMASK "255.255.255.0"
+#define GATEWAY "172.16.51.1"
+
+int wait1=1000;
+unsigned long time=0;
+
+int wifi_status=0;
+int ap_status=0;
+int tcp_status=0;
+char* wifi_read;
+
+char* data1;
+char* data2;
+char* data3;
+char* data4;
+int dataI;
+char pinS[10];
+int pinI=0;
+
+int ii;
+int pinmap[] = {0,2,8,10,9,7,6,4,5};
+
+float battP = 00;
+char* battS="0";
+
+
+
+void setup() 
+{
+  Utils.setLED(LED0, LED_ON);
+  Utils.setLED(LED1, LED_ON);
+  
+  //Power on 5V for relay
+  PWR.setSensorPower(SENS_5V,SENS_ON);
+  //Set pins
+  pinMode(DIGITAL1,INPUT);
+  pinMode(DIGITAL2,INPUT);
+  pinMode(DIGITAL3,INPUT);
+  pinMode(DIGITAL4,INPUT);
+  pinMode(DIGITAL5,OUTPUT);
+  pinMode(DIGITAL6,OUTPUT);
+  pinMode(DIGITAL7,OUTPUT);
+  pinMode(DIGITAL8,OUTPUT);
+  
+ 
+  wifi_status = WIFI.ON(socket);
+  wifiSetup();
+  wifiConnect();
+}
+
+
+
+void loop()
+{
+  time = millis();
+  while (millis()-time < wait1) {
+    Utils.setLED(LED0, LED_OFF);
+    //Reads from the TCP connection 
+    WIFI.read(NOBLO); 
+    if(WIFI.length>0) {
+      //Read wifi buffer
+      wifi_read = WIFI.answer; 
+      //Parse the data
+      data1 = strtok(wifi_read,","); 
+      data2 = strtok(NULL,",");
+      data3 = strtok(NULL,","); 
+      data4 = strtok(NULL,"");
+      
+      ii = atoi(data2); //pin#(logically, not mapped)
+   
+      //Type b for battery %
+      if(strcmp(data1,"B") == 0) {
+        Utils.setLED(LED0, LED_ON);
+        battP = PWR.getBatteryLevel();
+        USB.print(F("CURRENT BATTERY (%): "));
+        USB.println(battP);
+        Utils.float2String(battP,battS,2);
+        WIFI.send(battS);
+        WIFI.send("\r\n"); }
+      
+  
+      if(strcmp(data1,"D") == 0) { //haven't done D1 yet 
+        if (ii >= 2 && ii <= 4) { //D2 - D4 are read pins only
+          Utils.setLED(LED0, LED_ON);
+          USB.print(F("READING DIGITAL PIN "));
+          USB.print(ii);
+          USB.println(F(": "));
+          pinI = digitalRead(pinmap[ii]);
+          itoa(pinI,pinS,10);
+          USB.println(pinS);
+          WIFI.send(pinS);
+          WIFI.send("\r\n"); }
+          
+        if (ii >= 5 && ii <= 8) { //D5 - D8 are wrtie pins only
+          if(strcmp(data3,"H") == 0) {
+            Utils.setLED(LED0, LED_ON);
+            USB.print(F("DIGITAL PIN "));
+            USB.print(ii);
+            USB.println(F(" HIGH"));
+            digitalWrite(pinmap[ii], HIGH);
+            pinI = digitalRead(pinmap[ii]);
+            itoa(pinI,pinS,10);//
+            WIFI.send(pinS);
+            WIFI.send("\r\n"); }
+            
+          if(strcmp(data3,"L") == 0) {
+            Utils.setLED(LED0, LED_ON);
+            USB.print(F("DIGITAL PIN "));
+            USB.print(ii);
+            USB.println(F(" LOW"));
+            digitalWrite(pinmap[ii], LOW);
+            pinI = digitalRead(pinmap[ii]);
+            itoa(pinI,pinS,10);//
+            WIFI.send(pinS);
+            WIFI.send("\r\n"); }
+        }
+       }
+       
+       if (strcmp(data1,"A") == 0) { //A1 - A7 are read pins only
+         Utils.setLED(LED0, LED_ON);
+         USB.print(F("READING ANALOG PIN "));
+         USB.print(ii);
+         USB.print(F(": "));
+         pinI = analogRead(ii);
+         sprintf(pinS,"%d",pinI);
+         USB.println(pinI);
+         WIFI.send(pinS);
+         WIFI.send("\r\n"); }
+     
+      if (strcmp(data1,"ALL") == 0) {
+        Utils.setLED(LED0, LED_ON);
+        USB.print(F("ALL DATA: "));
+        int A1 = analogRead(ANALOG1);
+        int A2 = analogRead(ANALOG2);
+        int A3 = analogRead(ANALOG3);
+        int A4 = analogRead(ANALOG4);
+        int A5 = analogRead(ANALOG5);
+        int A6 = analogRead(ANALOG6);
+        int A7 = analogRead(ANALOG7);
+        int D1 = digitalRead(DIGITAL1);
+        int D2 = digitalRead(DIGITAL2);
+        int D3 = digitalRead(DIGITAL3);
+        int D4 = digitalRead(DIGITAL4);
+        int D5 = digitalRead(DIGITAL5);
+        int D6 = digitalRead(DIGITAL6);
+        int D7 = digitalRead(DIGITAL7);
+        int D8 = digitalRead(DIGITAL8);
+        
+        char ALLs[100];
+        sprintf(ALLs,"%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d:%d\r\n",A1,A2,A3,A4,A5,A6,A7,D1,D2,D3,D4,D5,D6,D7,D8);
+        USB.print(ALLs);
+        WIFI.send(ALLs); }
+        
+        //Type ALLOFF to turn off D5 - D8
+        if (strcmp(data1,"ALLOFF") == 0) { 
+          Utils.setLED(LED0, LED_ON);
+          for (ii=5;ii<9;ii++) {
+            digitalWrite(pinmap[ii], LOW);
+            USB.print(F("DIGITAL PIN "));
+            USB.print(ii);
+            USB.println(F(" LOW"));} }
+            
+        //Type ALLOFF to turn on D5 - D8     
+        if (strcmp(data1,"ALLON") == 0) { 
+          Utils.setLED(LED0, LED_ON);
+          for (ii=5;ii<9;ii++) {
+            digitalWrite(pinmap[ii], HIGH);
+            USB.print(F("DIGITAL PIN "));
+            USB.print(ii);
+            USB.println(F(" HIGH"));} }
+      }
+        
+    //Condition to avoid an overflow (DO NOT REMOVE)
+    if ( millis() < time ) {time = millis();}  
+  } 
+}
+
+
+
+void wifiSetup()
+{
+  //Switch ON the WiFi module on the desired socket and test
+  if( wifi_status == 1 )
+  {
+    USB.println(F("WiFi ON SUCCESS"));
+    //Configure the transport protocol (UDP, TCP, FTP, HTTP...) 
+    WIFI.setConnectionOptions(CLIENT_SERVER); 
+    WIFI.setDHCPoptions(DHCP_OFF);
+    //Configure the way the modules will resolve the IP address. 
+    WIFI.setIp(STATIC_IP); 
+    //Netmask
+    WIFI.setNetmask(NETMASK); 
+    // 2.5. set gateway address
+    WIFI.setGW(GATEWAY);    
+    //Configure how to connect the AP 
+    WIFI.setJoinMode(MANUAL); 
+    //Set Authentication key
+    WIFI.setAuthKey(WPA2,AUTHKEY); 
+    //Store values
+    WIFI.storeData();
+  }
+  else
+  {
+    wifi_status = 99;
+    USB.println();
+    USB.println(F("Wifi ON FAILED"));
+  }
+}
+
+
+void wifiConnect()
+{
+  if (WIFI.join(ESSID)) 
+  {
+    USB.println(F("WiFi JOIN AP SUCCESS"));
+    //Set success variable
+    ap_status = 1;
+    if (WIFI.setTCPserver(LOCAL_PORT)) 
+    {
+      USB.println(F("TCP SERVER START SUCCESS"));
+      //Set success variable
+      tcp_status = 1; 
+      USB.print(F("IP ADDRESS/PORT: "));
+      USB.print(STATIC_IP);
+      USB.print(F(" / "));
+      USB.println(LOCAL_PORT);
+    } 
+    else
+    {
+      tcp_status = 99;
+      USB.println(F("TCP SERVER START FAILED"));
+    }
+  }
+  else
+  {
+    ap_status = 99;
+    USB.println(F("WiFi JOIN AP FAILED"));
+  }
+}
